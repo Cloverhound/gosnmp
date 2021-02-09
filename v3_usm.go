@@ -322,7 +322,7 @@ func (sp *UsmSecurityParameters) setSecurityKeys(in SnmpV3SecurityParameters) er
 	sp.mu.Lock()
 	defer sp.mu.Unlock()
 
-	if insp, err = castUsmTableEntries(in); err != nil {
+	if insp, err = castUsmSecParams(in); err != nil {
 		return err
 	}
 
