@@ -613,21 +613,6 @@ func (x *GoSNMP) WalkAll(rootOid string) (results []SnmpPDU, err error) {
 	return x.walkAll(GetNextRequest, rootOid)
 }
 
-// CreateSecurityTable intialize the USM Table if multiple entries are present
-func (x *GoSNMP) CreateSecurityTable() error {
-	var err error
-	if val, ok := x.V3SecurityEntries.(UsmSecurityParametersEntries); ok {
-		x.v3USMSecurityTable, err = NewUsmTable(val)
-		return err
-	}
-	return nil
-}
-
-// GetUSMTable gets the USM Table
-func (x *GoSNMP) GetUSMTable() *UsmUserTable {
-	return x.v3USMSecurityTable
-}
-
 //
 // Public Functions (helpers) - in alphabetical order
 //
