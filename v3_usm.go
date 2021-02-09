@@ -154,7 +154,16 @@ type UsmSecurityParameters struct {
 	Logger Logger
 }
 
-// Log logs security paramater information to the provided GoSNMP Logger
+// UsmSecurityTable represents the table(map) of UsmSecurityParameters entries
+// indexed by AuthoritativeEngineID and UserName
+// Ref : https://tools.ietf.org/search/rfc3414#page-41
+type UsmSecurityTable struct {
+	mu              sync.Mutex
+	UsmTableEntries []UsmSecurityParameters
+	userTable       map[string]*UsmSecurityParameters
+}
+
+// Description logs security paramater information to the provided GoSNMP Logger
 func (sp *UsmSecurityParameters) Description() string {
 	var sb strings.Builder
 	sb.WriteString("user=")
@@ -299,6 +308,32 @@ func (sp *UsmSecurityParameters) setSecurityParameters(in SnmpV3SecurityParamete
 		if err != nil {
 			return err
 		}
+	}
+	sp.AuthoritativeEngineBoots = insp.AuthoritativeEngineBoots
+	sp.AuthoritativeEngineTime = insp.AuthoritativeEngineTime
+
+	return nil
+}
+
+func (sp *UsmSecurityParameters) setSecurityKeys(in SnmpV3SecurityParameters) error {
+	var insp *UsmSecurityParameters
+	var err error
+
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
+
+	if insp, err = castUsmTableEntries(in); err != nil {
+		return err
+	}
+
+	if sp.AuthoritativeEngineID == insp.AuthoritativeEngineID {
+		sp.AuthoritativeEngineID = insp.AuthoritativeEngineID
+		sp.SecretKey = insp.SecretKey
+		sp.PrivacyKey = insp.PrivacyKey
+		sp.PrivacyPassphrase = insp.PrivacyPassphrase
+		sp.AuthenticationPassphrase = insp.AuthenticationPassphrase
+	} else {
+		return fmt.Errorf("Security keys can be copied only if engine id matches")
 	}
 	sp.AuthoritativeEngineBoots = insp.AuthoritativeEngineBoots
 	sp.AuthoritativeEngineTime = insp.AuthoritativeEngineTime
@@ -851,6 +886,7 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 			sp.PrivacyKey = nil
 
 			sp.Logger.Printf("Parsed authoritativeEngineID %0x", []byte(AuthoritativeEngineID))
+			// Initialize the secret keys as there is a changes in the authoritative engine id
 			err = sp.initSecurityKeysNoLock()
 			if err != nil {
 				return 0, err
@@ -913,4 +949,76 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 	}
 
 	return cursor, nil
+}
+
+// GetSecurityIdentifier returns the USM key for the given USM Security Parameter
+func (sp *UsmSecurityParameters) GetSecurityIdentifier() string {
+	return sp.AuthoritativeEngineID + sp.UserName
+}
+
+// --- UsmSecurityTable  Functions ---
+
+//CreateTable constructs a new usm table
+func (usmt *UsmSecurityTable) CreateTable() error {
+	usmt.mu.Lock()
+	defer usmt.mu.Unlock()
+
+	if len(usmt.UsmTableEntries) < 1 {
+		return nil
+	}
+
+	// Traverse through the list of security parameters
+	for idx := range usmt.UsmTableEntries {
+		secParam := &usmt.UsmTableEntries[idx]
+		usmKey := secParam.GetSecurityIdentifier()
+		// add the secparam to user table
+		usmt.userTable[usmKey] = secParam
+	}
+	return nil
+}
+
+/*
+// AddUsmEntry adds and an entry to usm table, if key exists the existing
+// entry will get overwritten
+func (usmt *UsmUserTable) AddUsmEntry(secParam *UsmSecurityParameters) error {
+	usmt.mu.Lock()
+	defer usmt.mu.Unlock()
+
+	usmKey := GetUSMKey(secParam)
+	usmt.userTable[usmKey] = secParam
+	return nil
+}
+
+// DeleteUsmEntry removes an usm entry from USM Table
+func (usmt *UsmUserTable) DeleteUsmEntry(usmKey string) error {
+	usmt.mu.Lock()
+	defer usmt.mu.Unlock()
+
+	if _, ok := usmt.userTable[usmKey]; ok {
+		delete(usmt.userTable, usmKey)
+	}
+	return fmt.Errorf("USM Entry for key %s not found", usmKey)
+}
+*/
+
+//LookUp looks up the usm table gets the entry for the given usm key
+func (usmt *UsmSecurityTable) LookUp(securityIdentfier string) (*UsmSecurityParameters, error) {
+	usmt.mu.Lock()
+	defer usmt.mu.Unlock()
+
+	if secParam, ok := usmt.userTable[securityIdentfier]; ok {
+		return secParam, nil
+	}
+	return nil, fmt.Errorf("USM Entry for key %s not found", securityIdentfier)
+}
+
+// IsTableExists to check if USM table exists
+func (usmt *UsmSecurityTable) IsTableExists() bool {
+	usmt.mu.Lock()
+	defer usmt.mu.Unlock()
+
+	if len(usmt.UsmTableEntries) < 1 {
+		return false
+	}
+	return true
 }

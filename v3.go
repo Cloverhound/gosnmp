@@ -52,6 +52,16 @@ type SnmpV3SecurityParameters interface {
 	encryptPacket(scopedPdu []byte) ([]byte, error)
 	decryptPacket(packet []byte, cursor int) ([]byte, error)
 	initSecurityKeys() error
+	GetSecurityIdentifier() string
+	setSecurityKeys(in SnmpV3SecurityParameters) error
+}
+
+//SnmpV3SecurityTable represents the list of SnmpV3SecurityParameters which is required
+//to form the security table which will be used to lookup when an snmp response is parsed
+type SnmpV3SecurityTable interface {
+	CreateTable() error
+	LookUp(securityIdentfier string) (SnmpV3SecurityParameters, error)
+	IsTableExists() bool
 }
 
 func (x *GoSNMP) validateParametersV3() error {
@@ -407,6 +417,8 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 		return 0, fmt.Errorf("error parsing SNMPV3 message ID: truncted packet")
 	}
 	if response.SecurityParameters == nil {
+		// The response security parameter will be initialized with empty
+		// UsmSecurityParameters
 		response.SecurityParameters = &UsmSecurityParameters{Logger: x.Logger}
 	}
 
@@ -416,6 +428,14 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	}
 	x.logPrintf("Parsed Security Parameters. now offset=%v,", cursor)
 
+	if x.SecurityTable.IsTableExists() {
+		secIdentifer := response.SecurityParameters.GetSecurityIdentifier()
+		secParamEntry, err := x.SecurityTable.LookUp(secIdentifer)
+		if err != nil {
+			return 0, err
+		}
+		response.SecurityParameters.setSecurityKeys(secParamEntry)
+	}
 	return cursor, nil
 }
 
