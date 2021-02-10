@@ -99,7 +99,7 @@ func (packet *SnmpPacket) authenticate(msg []byte) ([]byte, error) {
 }
 
 func (x *GoSNMP) testAuthentication(packet []byte, result *SnmpPacket, useResponseSecurityParameters bool) error {
-	if x.Version != Version3 {
+	if x.Version != Version3 && !x.TrapRecvAllowAll {
 		return fmt.Errorf("testAuthentication called with non Version3 connection")
 	}
 	msgFlags := x.MsgFlags

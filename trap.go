@@ -378,6 +378,9 @@ func (x *GoSNMP) UnmarshalTrap(trap []byte, useResponseSecurityParameters bool) 
 
 	if result.Version == Version3 {
 		if result.SecurityModel == UserSecurityModel {
+			if x.SecurityTable.IsTableExists() {
+				useResponseSecurityParameters = true
+			}
 			err = x.testAuthentication(trap, result, useResponseSecurityParameters)
 			if err != nil {
 				x.logPrintf("UnmarshalTrap v3 auth: %s\n", err)
