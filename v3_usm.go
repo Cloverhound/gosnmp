@@ -934,7 +934,9 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 	}
 	// blank msgAuthenticationParameters to prepare for authentication check later
 	if flags&AuthNoPriv > 0 {
-		if sp.AuthenticationProtocol > NoAuth {
+		// In case if the authentication protocol is not configured or set to NoAuth, then the packet cannot
+		// be processed further
+		if sp.AuthenticationProtocol <= NoAuth {
 			msg := "authentication parameters are not configured to parse incoming authenticated message"
 			return 0, fmt.Errorf("error parsing SNMPv3 User Security Model: %s ", msg)
 		}
