@@ -362,7 +362,9 @@ func (x *GoSNMP) validateParameters() error {
 		return fmt.Errorf("field MaxOids cannot be less than 0")
 	}
 
-	x.SecurityTable.CreateTable()
+	if x.SecurityTable != nil {
+		x.SecurityTable.CreateTable()
+	}
 
 	if x.TrapRecvAllowAll == false {
 		if x.Version == Version3 {

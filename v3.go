@@ -428,7 +428,8 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	}
 	x.logPrintf("Parsed Security Parameters. now offset=%v,", cursor)
 
-	if x.SecurityTable.IsTableExists() {
+	fmt.Println("Checking for Security Table")
+	if x.SecurityTable != nil {
 		secIdentifer := response.SecurityParameters.GetSecurityIdentifier()
 		secParamEntry, err := x.SecurityTable.LookUp(secIdentifer)
 		if err != nil {
