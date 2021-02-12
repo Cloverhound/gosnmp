@@ -983,20 +983,19 @@ func (usmt *UsmSecurityTable) CreateTable() error {
 	return nil
 }
 
-/*
-// AddUsmEntry adds and an entry to usm table, if key exists the existing
+// AddEntry adds and an entry to usm table, if key exists the existing
 // entry will get overwritten
-func (usmt *UsmUserTable) AddUsmEntry(secParam *UsmSecurityParameters) error {
+func (usmt *UsmSecurityTable) AddEntry(secParam *UsmSecurityParameters) error {
 	usmt.mu.Lock()
 	defer usmt.mu.Unlock()
 
-	usmKey := GetUSMKey(secParam)
+	usmKey := secParam.GetSecurityIdentifier()
 	usmt.userTable[usmKey] = secParam
 	return nil
 }
 
-// DeleteUsmEntry removes an usm entry from USM Table
-func (usmt *UsmUserTable) DeleteUsmEntry(usmKey string) error {
+// DeleteEntry removes an usm entry from USM Table
+func (usmt *UsmSecurityTable) DeleteEntry(usmKey string) error {
 	usmt.mu.Lock()
 	defer usmt.mu.Unlock()
 
@@ -1005,7 +1004,6 @@ func (usmt *UsmUserTable) DeleteUsmEntry(usmKey string) error {
 	}
 	return fmt.Errorf("USM Entry for key %s not found", usmKey)
 }
-*/
 
 //LookUp looks up the usm table gets the entry for the given usm key
 func (usmt *UsmSecurityTable) LookUp(securityIdentfier string) (*UsmSecurityParameters, error) {

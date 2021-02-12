@@ -62,6 +62,8 @@ type SnmpV3SecurityTable interface {
 	CreateTable() error
 	LookUp(securityIdentfier string) (SnmpV3SecurityParameters, error)
 	IsTableExists() bool
+	AddEntry(secParam *UsmSecurityParameters) error
+	DeleteEntry(usmKey string) error
 }
 
 func (x *GoSNMP) validateParametersV3() error {
