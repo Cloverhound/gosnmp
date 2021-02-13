@@ -995,6 +995,7 @@ func (usmt *UsmSecurityTable) AddEntry(in SnmpV3SecurityParameters) error {
 	usmt.mu.Lock()
 	defer usmt.mu.Unlock()
 
+	// usmt.UsmTableEntries = append(usmt.UsmTableEntries, secParam)
 	usmKey := secParam.GetSecurityIdentifier()
 	usmt.userTable[usmKey] = secParam
 	return nil
