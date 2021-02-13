@@ -1012,7 +1012,14 @@ func (usmt *UsmSecurityTable) DeleteEntry(usmKey string) error {
 }
 
 //LookUp looks up the usm table gets the entry for the given usm key
-func (usmt *UsmSecurityTable) LookUp(securityIdentfier string) (*UsmSecurityParameters, error) {
+func (usmt *UsmSecurityTable) LookUp(in SnmpV3SecurityParameters) (*UsmSecurityParameters, error) {
+	var secParam *UsmSecurityParameters
+	var err error
+	if secParam, err = castUsmSecParams(in); err != nil {
+		return err
+	}
+
+	securityIdentfier := secParam.GetSecurityIdentifier()
 	usmt.mu.Lock()
 	defer usmt.mu.Unlock()
 
