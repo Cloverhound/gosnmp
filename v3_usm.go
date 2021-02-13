@@ -985,7 +985,13 @@ func (usmt *UsmSecurityTable) CreateTable() error {
 
 // AddEntry adds and an entry to usm table, if key exists the existing
 // entry will get overwritten
-func (usmt *UsmSecurityTable) AddEntry(secParam *UsmSecurityParameters) error {
+func (usmt *UsmSecurityTable) AddEntry(in SnmpV3SecurityParameters) error {
+	var secParam *UsmSecurityParameters
+	var err error
+	if secParam, err = castUsmSecParams(in); err != nil {
+		return err
+	}
+
 	usmt.mu.Lock()
 	defer usmt.mu.Unlock()
 

@@ -62,7 +62,7 @@ type SnmpV3SecurityTable interface {
 	CreateTable() error
 	LookUp(securityIdentfier string) (SnmpV3SecurityParameters, error)
 	IsTableExists() bool
-	AddEntry(secParam *UsmSecurityParameters) error
+	AddEntry(secParam SnmpV3SecurityParameters) error
 	DeleteEntry(usmKey string) error
 }
 
