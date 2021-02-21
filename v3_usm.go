@@ -969,6 +969,9 @@ func (usmt *UsmSecurityTable) CreateTable() error {
 	usmt.mu.Lock()
 	defer usmt.mu.Unlock()
 
+	// Create the map
+	usmt.userTable = make(map[string]*UsmSecurityParameters)
+
 	if len(usmt.UsmTableEntries) < 1 {
 		return nil
 	}
