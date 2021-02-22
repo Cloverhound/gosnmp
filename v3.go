@@ -435,6 +435,7 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 		secIdentifer := response.SecurityParameters.GetSecurityIdentifier()
 		secParamEntry, err := x.SecurityTable.LookUp(secIdentifer)
 		if err != nil {
+			x.Logger.Printf("Security Table Lookup Failed for Key %s", secIdentifer)
 			return 0, err
 		}
 		response.SecurityParameters.setSecurityKeys(secParamEntry)
@@ -485,8 +486,9 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 		}
 
 		if contextEngineID, ok := rawContextEngineID.(string); ok {
+			contextEngineID = fmt.Sprintf("%0x", []byte(contextEngineID))
 			response.ContextEngineID = contextEngineID
-			x.logPrintf("Parsed contextEngineID %s", contextEngineID)
+			x.logPrintf("Parsed contextEngineID %0x", []byte(contextEngineID))
 		}
 		rawContextName, count, err := parseRawField(x.Logger, packet[cursor:], "contextName")
 		if err != nil {

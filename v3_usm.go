@@ -161,6 +161,8 @@ type UsmSecurityTable struct {
 	mu              sync.Mutex
 	UsmTableEntries []UsmSecurityParameters
 	userTable       map[string]*UsmSecurityParameters
+
+	Logger Logger
 }
 
 // Description logs security paramater information to the provided GoSNMP Logger
@@ -881,7 +883,7 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 	cursor += count
 	if AuthoritativeEngineID, ok := rawMsgAuthoritativeEngineID.(string); ok {
 		if sp.AuthoritativeEngineID != AuthoritativeEngineID {
-			sp.AuthoritativeEngineID = AuthoritativeEngineID
+			sp.AuthoritativeEngineID = fmt.Sprintf("%0x", []byte(AuthoritativeEngineID))
 			sp.SecretKey = nil
 			sp.PrivacyKey = nil
 
@@ -997,10 +999,10 @@ func (usmt *UsmSecurityTable) AddEntry(in SnmpV3SecurityParameters) error {
 
 	usmt.mu.Lock()
 	defer usmt.mu.Unlock()
-
 	// usmt.UsmTableEntries = append(usmt.UsmTableEntries, secParam)
 	usmKey := secParam.GetSecurityIdentifier()
 	usmt.userTable[usmKey] = secParam
+	usmt.Logger.Printf("Added user table entry with key as %s", usmKey)
 	return nil
 }
 
