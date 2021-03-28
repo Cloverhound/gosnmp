@@ -477,7 +477,6 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 		}
 
 		if contextEngineID, ok := rawContextEngineID.(string); ok {
-			contextEngineID = fmt.Sprintf("%0x", []byte(contextEngineID))
 			response.ContextEngineID = contextEngineID
 			x.logPrintf("Parsed contextEngineID %0x", []byte(contextEngineID))
 		}
