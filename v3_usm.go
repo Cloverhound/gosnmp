@@ -956,7 +956,8 @@ func (sp *UsmSecurityParameters) unmarshal(secTable SnmpV3SecurityTable, flags S
 	}
 	if msgAuthenticationParameters, ok := rawMsgAuthParameters.(string); ok {
 		sp.AuthenticationParameters = msgAuthenticationParameters
-		sp.Logger.Printf("Parsed authenticationParameters %s", msgAuthenticationParameters)
+		// Skip printing of msgAuthenticationParameters as it is not useful for debugger
+		sp.Logger.Printf("Parsed authenticationParameters")
 	}
 	// blank msgAuthenticationParameters to prepare for authentication check later
 	if flags&AuthNoPriv > 0 {
