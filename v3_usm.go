@@ -979,6 +979,13 @@ func (sp *UsmSecurityParameters) unmarshal(secTable SnmpV3SecurityTable, flags S
 	if msgPrivacyParameters, ok := rawMsgPrivacyParameters.(string); ok {
 		sp.PrivacyParameters = []byte(msgPrivacyParameters)
 		sp.Logger.Printf("Parsed privacyParameters %s", msgPrivacyParameters)
+		if flags&AuthPriv > 0 {
+			if sp.PrivacyProtocol <= NoPriv {
+				msg := "privacy parameters are not configured to parse incoming encrypted message"
+				return 0, fmt.Errorf("error parsing SNMPv3 User Security Model: %s ", msg)
+
+			}
+		}
 	}
 
 	return cursor, nil
