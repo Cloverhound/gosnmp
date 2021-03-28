@@ -46,7 +46,7 @@ type SnmpV3SecurityParameters interface {
 	getDefaultContextEngineID() string
 	setSecurityParameters(in SnmpV3SecurityParameters) error
 	marshal(flags SnmpV3MsgFlags) ([]byte, error)
-	unmarshal(flags SnmpV3MsgFlags, packet []byte, cursor int) (int, error)
+	unmarshal(secTable SnmpV3SecurityTable, flags SnmpV3MsgFlags, packet []byte, cursor int) (int, error)
 	authenticate(packet []byte) error
 	isAuthentic(packetBytes []byte, packet *SnmpPacket) (bool, error)
 	encryptPacket(scopedPdu []byte) ([]byte, error)
@@ -61,7 +61,6 @@ type SnmpV3SecurityParameters interface {
 type SnmpV3SecurityTable interface {
 	CreateTable() error
 	LookUp(securityIdentfier string) (SnmpV3SecurityParameters, error)
-	IsTableExists() bool
 	AddEntry(secParam SnmpV3SecurityParameters) error
 	DeleteEntry(usmKey string) error
 }
@@ -421,24 +420,17 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	if response.SecurityParameters == nil {
 		// The response security parameter will be initialized with empty
 		// UsmSecurityParameters
-		response.SecurityParameters = &UsmSecurityParameters{Logger: x.Logger}
+		response.SecurityParameters = &UsmSecurityParameters{
+			Logger: x.Logger,
+		}
 	}
 
-	cursor, err = response.SecurityParameters.unmarshal(response.MsgFlags, packet, cursor)
+	cursor, err = response.SecurityParameters.unmarshal(x.SecurityTable, response.MsgFlags, packet, cursor)
 	if err != nil {
 		return 0, err
 	}
 	x.logPrintf("Parsed Security Parameters. now offset=%v,", cursor)
 
-	if x.SecurityTable != nil {
-		secIdentifer := response.SecurityParameters.GetSecurityIdentifier()
-		secParamEntry, err := x.SecurityTable.LookUp(secIdentifer)
-		if err != nil {
-			x.Logger.Printf("Security Table Lookup Failed for Key %s", secIdentifer)
-			return 0, err
-		}
-		response.SecurityParameters.setSecurityKeys(secParamEntry)
-	}
 	return cursor, nil
 }
 

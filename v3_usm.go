@@ -158,9 +158,8 @@ type UsmSecurityParameters struct {
 // indexed by AuthoritativeEngineID and UserName
 // Ref : https://tools.ietf.org/search/rfc3414#page-41
 type UsmSecurityTable struct {
-	mu              sync.Mutex
-	UsmTableEntries []UsmSecurityParameters
-	userTable       map[string]*UsmSecurityParameters
+	mu        sync.Mutex
+	userTable map[string]*UsmSecurityParameters
 
 	Logger Logger
 }
@@ -329,11 +328,12 @@ func (sp *UsmSecurityParameters) setSecurityKeys(in SnmpV3SecurityParameters) er
 	}
 
 	if sp.AuthoritativeEngineID == insp.AuthoritativeEngineID {
-		sp.AuthoritativeEngineID = insp.AuthoritativeEngineID
 		sp.SecretKey = insp.SecretKey
 		sp.PrivacyKey = insp.PrivacyKey
 		sp.PrivacyPassphrase = insp.PrivacyPassphrase
 		sp.AuthenticationPassphrase = insp.AuthenticationPassphrase
+		sp.PrivacyProtocol = insp.PrivacyProtocol
+		sp.AuthenticationProtocol = insp.AuthenticationProtocol
 	} else {
 		return fmt.Errorf("Security keys can be copied only if engine id matches")
 	}
@@ -409,6 +409,14 @@ func castUsmSecParams(secParams SnmpV3SecurityParameters) (*UsmSecurityParameter
 	s, ok := secParams.(*UsmSecurityParameters)
 	if !ok || s == nil {
 		return nil, fmt.Errorf("param SnmpV3SecurityParameters is not of type *UsmSecurityParameters")
+	}
+	return s, nil
+}
+
+func castUsmSecTable(secTable SnmpV3SecurityTable) (*UsmSecurityTable, error) {
+	s, ok := secTable.(*UsmSecurityTable)
+	if !ok || s == nil {
+		return nil, fmt.Errorf("param SnmpV3SecurityTable is not of type *UsmSecurityTable")
 	}
 	return s, nil
 }
@@ -864,7 +872,7 @@ func (sp *UsmSecurityParameters) marshal(flags SnmpV3MsgFlags) ([]byte, error) {
 	return tmpseq, nil
 }
 
-func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, cursor int) (int, error) {
+func (sp *UsmSecurityParameters) unmarshal(secTable SnmpV3SecurityTable, flags SnmpV3MsgFlags, packet []byte, cursor int) (int, error) {
 	var err error
 
 	if PDUType(packet[cursor]) != Sequence {
@@ -883,7 +891,7 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 	cursor += count
 	if AuthoritativeEngineID, ok := rawMsgAuthoritativeEngineID.(string); ok {
 		if sp.AuthoritativeEngineID != AuthoritativeEngineID {
-			sp.AuthoritativeEngineID = fmt.Sprintf("%0x", []byte(AuthoritativeEngineID))
+			sp.AuthoritativeEngineID = AuthoritativeEngineID
 			sp.SecretKey = nil
 			sp.PrivacyKey = nil
 
@@ -924,6 +932,22 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 	if msgUserName, ok := rawMsgUserName.(string); ok {
 		sp.UserName = msgUserName
 		sp.Logger.Printf("Parsed userName %s", msgUserName)
+	}
+
+	if secTable != nil {
+		var usmTable *UsmSecurityTable
+		var err error
+		if usmTable, err = castUsmSecTable(secTable); err != nil {
+			return 0, err
+		}
+
+		secIdentifer := sp.GetSecurityIdentifier()
+		secParamEntry, err := usmTable.LookUp(secIdentifer)
+		if err != nil {
+			sp.Logger.Printf("USM table entry not found for incoming username and engine id")
+			return 0, err
+		}
+		sp.setSecurityKeys(secParamEntry)
 	}
 
 	rawMsgAuthParameters, count, err := parseRawField(sp.Logger, packet[cursor:], "msgAuthenticationParameters")
@@ -974,17 +998,6 @@ func (usmt *UsmSecurityTable) CreateTable() error {
 	// Create the map
 	usmt.userTable = make(map[string]*UsmSecurityParameters)
 
-	if len(usmt.UsmTableEntries) < 1 {
-		return nil
-	}
-
-	// Traverse through the list of security parameters
-	for idx := range usmt.UsmTableEntries {
-		secParam := &usmt.UsmTableEntries[idx]
-		usmKey := secParam.GetSecurityIdentifier()
-		// add the secparam to user table
-		usmt.userTable[usmKey] = secParam
-	}
 	return nil
 }
 
@@ -1001,6 +1014,11 @@ func (usmt *UsmSecurityTable) AddEntry(in SnmpV3SecurityParameters) error {
 	defer usmt.mu.Unlock()
 	// usmt.UsmTableEntries = append(usmt.UsmTableEntries, secParam)
 	usmKey := secParam.GetSecurityIdentifier()
+	err = secParam.initSecurityKeysNoLock()
+	if err != nil {
+		usmt.Logger.Printf("Unable to intialize keys")
+		return err
+	}
 	usmt.userTable[usmKey] = secParam
 	usmt.Logger.Printf("Added user table entry with key as %s", usmKey)
 	return nil
@@ -1026,15 +1044,4 @@ func (usmt *UsmSecurityTable) LookUp(securityIdentfier string) (SnmpV3SecurityPa
 		return secParam, nil
 	}
 	return nil, fmt.Errorf("USM Entry for key %s not found", securityIdentfier)
-}
-
-// IsTableExists to check if USM table exists
-func (usmt *UsmSecurityTable) IsTableExists() bool {
-	usmt.mu.Lock()
-	defer usmt.mu.Unlock()
-
-	if len(usmt.UsmTableEntries) < 1 {
-		return false
-	}
-	return true
 }
