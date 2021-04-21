@@ -934,7 +934,7 @@ func (sp *UsmSecurityParameters) unmarshal(secTable SnmpV3SecurityTable, flags S
 		sp.Logger.Printf("Parsed userName %s", msgUserName)
 	}
 
-	if secTable != nil {
+	if secTable != nil && len(sp.UserName) > 0 {
 		var usmTable *UsmSecurityTable
 		var err error
 		if usmTable, err = castUsmSecTable(secTable); err != nil {
