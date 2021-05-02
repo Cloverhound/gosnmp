@@ -54,6 +54,8 @@ type SnmpV3SecurityParameters interface {
 	initSecurityKeys() error
 	GetSecurityIdentifier() string
 	setSecurityKeys(in SnmpV3SecurityParameters) error
+	GetSecurityName() string
+	GetSecurityEngineID() string
 }
 
 //SnmpV3SecurityTable represents the list of SnmpV3SecurityParameters which is required

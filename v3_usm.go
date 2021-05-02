@@ -996,6 +996,16 @@ func (sp *UsmSecurityParameters) GetSecurityIdentifier() string {
 	return sp.AuthoritativeEngineID + sp.UserName
 }
 
+// GetSecurityName returns the USM user name for the given USM Security Parameter
+func (sp *UsmSecurityParameters) GetSecurityName() string {
+	return sp.UserName
+}
+
+// GetSecurityIdentifier returns the Authoritative/SecurityEngineID for the given USM Security Parameter
+func (sp *UsmSecurityParameters) GetSecurityEngineID() string {
+	return sp.AuthoritativeEngineID
+}
+
 // --- UsmSecurityTable  Functions ---
 
 //CreateTable constructs a new usm table
