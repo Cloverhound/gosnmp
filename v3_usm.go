@@ -1048,7 +1048,9 @@ func (usmt *UsmSecurityTable) DeleteEntry(usmKey string) error {
 	defer usmt.mu.Unlock()
 
 	if _, ok := usmt.userTable[usmKey]; ok {
+		usmt.Logger.Printf("Deleted user table entry with key as %s", usmKey)
 		delete(usmt.userTable, usmKey)
+		return nil
 	}
 	return fmt.Errorf("USM Entry for key %s not found", usmKey)
 }
