@@ -421,11 +421,8 @@ func castUsmSecTable(secTable SnmpV3SecurityTable) (*UsmSecurityTable, error) {
 	return s, nil
 }
 
-func GetUsmSecParams(message *SnmpPacket) (*UsmSecurityParameters, error) {
-	if message == nil {
-		return nil, fmt.Errorf("Invalid SNMP Message")
-	}
-	return castUsmSecParams(message.SecurityParameters)
+func CastUsmSecParams(secParams SnmpV3SecurityParameters) (*UsmSecurityParameters, error) {
+	return castUsmSecParams(secParams)
 }
 
 var (
