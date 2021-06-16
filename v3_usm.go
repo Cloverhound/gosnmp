@@ -337,8 +337,6 @@ func (sp *UsmSecurityParameters) setSecurityKeys(in SnmpV3SecurityParameters) er
 	} else {
 		return fmt.Errorf("Security keys can be copied only if engine id matches")
 	}
-	sp.AuthoritativeEngineBoots = insp.AuthoritativeEngineBoots
-	sp.AuthoritativeEngineTime = insp.AuthoritativeEngineTime
 
 	return nil
 }
