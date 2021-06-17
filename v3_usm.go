@@ -248,6 +248,11 @@ func (sp *UsmSecurityParameters) Copy() SnmpV3SecurityParameters {
 func (sp *UsmSecurityParameters) getDefaultContextEngineID() string {
 	return sp.AuthoritativeEngineID
 }
+
+func (sp *UsmSecurityParameters) InitSecurityKeys() error {
+	return sp.initSecurityKeys()
+}
+
 func (sp *UsmSecurityParameters) initSecurityKeys() error {
 	sp.mu.Lock()
 	defer sp.mu.Unlock()
