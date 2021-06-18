@@ -24,8 +24,6 @@ import (
 // protocol.
 //
 
-//go:generate stringer -type SnmpVersion
-
 // SnmpVersion 1, 2c and 3 implemented
 type SnmpVersion uint8
 
