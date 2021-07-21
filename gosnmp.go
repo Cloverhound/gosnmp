@@ -141,11 +141,18 @@ type GoSNMP struct {
 	// SecurityParameters is an SNMPV3 Security Model parameters struct.
 	SecurityParameters SnmpV3SecurityParameters
 
+	// SecurityTable contains list of sec params entries indexed
+	// the keys which are combination of specific security params
+	SecurityTable SnmpV3SecurityTable
+
 	// ContextEngineID is SNMPV3 ContextEngineID in ScopedPDU.
 	ContextEngineID string
 
 	// ContextName is SNMPV3 ContextName in ScopedPDU
 	ContextName string
+
+	// Allow all versions of traps to be received
+	TrapRecvAllowAll bool
 
 	// Internal - used to sync requests to responses - snmpv3.
 	msgID uint32
@@ -331,6 +338,10 @@ func (x *GoSNMP) netConnect() error {
 	return err
 }
 
+func (x *GoSNMP) ValidateParameters() error {
+	return x.validateParameters()
+}
+
 func (x *GoSNMP) validateParameters() error {
 	if x.Transport == "" {
 		x.Transport = udp
@@ -342,16 +353,22 @@ func (x *GoSNMP) validateParameters() error {
 		return fmt.Errorf("field MaxOids cannot be less than 0")
 	}
 
-	if x.Version == Version3 {
-		x.MsgFlags |= Reportable // tell the snmp server that a report PDU MUST be sent
+	if x.SecurityTable != nil {
+		x.SecurityTable.CreateTable()
+	}
 
-		err := x.validateParametersV3()
-		if err != nil {
-			return err
-		}
-		err = x.SecurityParameters.init(x.Logger)
-		if err != nil {
-			return err
+	if x.TrapRecvAllowAll == false {
+		if x.Version == Version3 {
+			x.MsgFlags |= Reportable // tell the snmp server that a report PDU MUST be sent
+
+			err := x.validateParametersV3()
+			if err != nil {
+				return err
+			}
+			err = x.SecurityParameters.init(x.Logger)
+			if err != nil {
+				return err
+			}
 		}
 	}
 

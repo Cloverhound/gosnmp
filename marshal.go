@@ -84,6 +84,8 @@ type VarBind struct {
 	Value asn1.RawValue
 }
 
+//go:generate stringer -type PDUType
+
 // PDUType describes which SNMP Protocol Data Unit is being sent.
 type PDUType byte
 

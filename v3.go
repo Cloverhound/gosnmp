@@ -47,12 +47,25 @@ type SnmpV3SecurityParameters interface {
 	getDefaultContextEngineID() string
 	setSecurityParameters(in SnmpV3SecurityParameters) error
 	marshal(flags SnmpV3MsgFlags) ([]byte, error)
-	unmarshal(flags SnmpV3MsgFlags, packet []byte, cursor int) (int, error)
+	unmarshal(secTable SnmpV3SecurityTable, flags SnmpV3MsgFlags, packet []byte, cursor int) (int, error)
 	authenticate(packet []byte) error
 	isAuthentic(packetBytes []byte, packet *SnmpPacket) (bool, error)
 	encryptPacket(scopedPdu []byte) ([]byte, error)
 	decryptPacket(packet []byte, cursor int) ([]byte, error)
 	initSecurityKeys() error
+	GetSecurityIdentifier() string
+	setSecurityKeys(in SnmpV3SecurityParameters) error
+	GetSecurityName() string
+	GetSecurityEngineID() string
+}
+
+//SnmpV3SecurityTable represents the list of SnmpV3SecurityParameters which is required
+//to form the security table which will be used to lookup when an snmp response is parsed
+type SnmpV3SecurityTable interface {
+	CreateTable() error
+	LookUp(securityIdentfier string) (SnmpV3SecurityParameters, error)
+	AddEntry(secParam SnmpV3SecurityParameters) error
+	DeleteEntry(usmKey string) error
 }
 
 func (x *GoSNMP) validateParametersV3() error {
@@ -90,7 +103,7 @@ func (packet *SnmpPacket) authenticate(msg []byte) ([]byte, error) {
 }
 
 func (x *GoSNMP) testAuthentication(packet []byte, result *SnmpPacket, useResponseSecurityParameters bool) error {
-	if x.Version != Version3 {
+	if x.Version != Version3 && !x.TrapRecvAllowAll {
 		return fmt.Errorf("testAuthentication called with non Version3 connection")
 	}
 	msgFlags := x.MsgFlags
@@ -408,10 +421,14 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 		return 0, errors.New("error parsing SNMPV3 message ID: truncted packet")
 	}
 	if response.SecurityParameters == nil {
-		response.SecurityParameters = &UsmSecurityParameters{Logger: x.Logger}
+		// The response security parameter will be initialized with empty
+		// UsmSecurityParameters
+		response.SecurityParameters = &UsmSecurityParameters{
+			Logger: x.Logger,
+		}
 	}
 
-	cursor, err = response.SecurityParameters.unmarshal(response.MsgFlags, packet, cursor)
+	cursor, err = response.SecurityParameters.unmarshal(x.SecurityTable, response.MsgFlags, packet, cursor)
 	if err != nil {
 		return 0, err
 	}
@@ -464,7 +481,7 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 
 		if contextEngineID, ok := rawContextEngineID.(string); ok {
 			response.ContextEngineID = contextEngineID
-			x.Logger.Printf("Parsed contextEngineID %s", contextEngineID)
+			x.Logger.Printf("Parsed contextEngineID %0x", []byte(contextEngineID))
 		}
 		rawContextName, count, err := parseRawField(x.Logger, packet[cursor:], "contextName")
 		if err != nil {
