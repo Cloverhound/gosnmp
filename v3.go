@@ -11,6 +11,7 @@ package gosnmp
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"runtime"
 )
@@ -57,10 +58,10 @@ type SnmpV3SecurityParameters interface {
 func (x *GoSNMP) validateParametersV3() error {
 	// update following code if you implement a new security model
 	if x.SecurityModel != UserSecurityModel {
-		return fmt.Errorf("the SNMPV3 User Security Model is the only SNMPV3 security model currently implemented")
+		return errors.New("the SNMPV3 User Security Model is the only SNMPV3 security model currently implemented")
 	}
 	if x.SecurityParameters == nil {
-		return fmt.Errorf("SNMPV3 SecurityParameters must be set")
+		return errors.New("SNMPV3 SecurityParameters must be set")
 	}
 
 	return x.SecurityParameters.validate(x.MsgFlags)
@@ -212,7 +213,7 @@ func (packet *SnmpPacket) marshalV3(buf *bytes.Buffer) (*bytes.Buffer, error) { 
 		return emptyBuffer, err
 	}
 	buf.Write([]byte{byte(Sequence), byte(len(header))})
-	packet.logPrintf("Marshal V3 Header len=%d. Eaten Last 4 Bytes=%v", len(header), header[len(header)-4:])
+	packet.Logger.Printf("Marshal V3 Header len=%d. Eaten Last 4 Bytes=%v", len(header), header[len(header)-4:])
 	buf.Write(header)
 
 	var securityParameters []byte
@@ -220,7 +221,7 @@ func (packet *SnmpPacket) marshalV3(buf *bytes.Buffer) (*bytes.Buffer, error) { 
 	if err != nil {
 		return emptyBuffer, err
 	}
-	packet.logPrintf("Marshal V3 SecurityParameters len=%d. Eaten Last 4 Bytes=%v",
+	packet.Logger.Printf("Marshal V3 SecurityParameters len=%d. Eaten Last 4 Bytes=%v",
 		len(securityParameters), securityParameters[len(securityParameters)-4:])
 
 	buf.Write([]byte{byte(OctetString)})
@@ -250,7 +251,7 @@ func (packet *SnmpPacket) marshalV3Header() ([]byte, error) {
 		return nil, err
 	}
 	oldLen := 0
-	packet.logPrintf("MarshalV3Header msgID len=%v", buf.Len()-oldLen)
+	packet.Logger.Printf("MarshalV3Header msgID len=%v", buf.Len()-oldLen)
 	oldLen = buf.Len()
 	// maximum response msg size
 	var maxBufSize uint32 = rxBufSize
@@ -260,19 +261,19 @@ func (packet *SnmpPacket) marshalV3Header() ([]byte, error) {
 	maxmsgsize := marshalUvarInt(maxBufSize)
 	buf.Write([]byte{byte(Integer), byte(len(maxmsgsize))})
 	buf.Write(maxmsgsize)
-	packet.logPrintf("MarshalV3Header maxmsgsize len=%v", buf.Len()-oldLen)
+	packet.Logger.Printf("MarshalV3Header maxmsgsize len=%v", buf.Len()-oldLen)
 	oldLen = buf.Len()
 
 	// msg flags
 	buf.Write([]byte{byte(OctetString), 1, byte(packet.MsgFlags)})
 
-	packet.logPrintf("MarshalV3Header msg flags len=%v", buf.Len()-oldLen)
+	packet.Logger.Printf("MarshalV3Header msg flags len=%v", buf.Len()-oldLen)
 	oldLen = buf.Len()
 
 	// msg security model
 	buf.Write([]byte{byte(Integer), 1, byte(packet.SecurityModel)})
 
-	packet.logPrintf("MarshalV3Header msg security model len=%v", buf.Len()-oldLen)
+	packet.Logger.Printf("MarshalV3Header msg security model len=%v", buf.Len()-oldLen)
 
 	return buf.Bytes(), nil
 }
@@ -339,72 +340,72 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	_, cursorTmp := parseLength(packet[cursor:])
 	cursor += cursorTmp
 	if cursor > len(packet) {
-		return 0, fmt.Errorf("error parsing SNMPV3 message ID: truncted packet")
+		return 0, errors.New("error parsing SNMPV3 message ID: truncted packet")
 	}
 
 	rawMsgID, count, err := parseRawField(x.Logger, packet[cursor:], "msgID")
 	if err != nil {
-		return 0, fmt.Errorf("error parsing SNMPV3 message ID: %s", err.Error())
+		return 0, fmt.Errorf("error parsing SNMPV3 message ID: %w", err)
 	}
 	cursor += count
 	if cursor > len(packet) {
-		return 0, fmt.Errorf("error parsing SNMPV3 message ID: truncted packet")
+		return 0, errors.New("error parsing SNMPV3 message ID: truncted packet")
 	}
 
 	if MsgID, ok := rawMsgID.(int); ok {
 		response.MsgID = uint32(MsgID)
-		x.logPrintf("Parsed message ID %d", MsgID)
+		x.Logger.Printf("Parsed message ID %d", MsgID)
 	}
 
 	rawMsgMaxSize, count, err := parseRawField(x.Logger, packet[cursor:], "msgMaxSize")
 	if err != nil {
-		return 0, fmt.Errorf("error parsing SNMPV3 msgMaxSize: %s", err.Error())
+		return 0, fmt.Errorf("error parsing SNMPV3 msgMaxSize: %w", err)
 	}
 	cursor += count
 	if cursor > len(packet) {
-		return 0, fmt.Errorf("error parsing SNMPV3 message ID: truncted packet")
+		return 0, errors.New("error parsing SNMPV3 message ID: truncted packet")
 	}
 
 	if MsgMaxSize, ok := rawMsgMaxSize.(int); ok {
 		response.MsgMaxSize = uint32(MsgMaxSize)
-		x.logPrintf("Parsed message max size %d", MsgMaxSize)
+		x.Logger.Printf("Parsed message max size %d", MsgMaxSize)
 	}
 
 	rawMsgFlags, count, err := parseRawField(x.Logger, packet[cursor:], "msgFlags")
 	if err != nil {
-		return 0, fmt.Errorf("error parsing SNMPV3 msgFlags: %s", err.Error())
+		return 0, fmt.Errorf("error parsing SNMPV3 msgFlags: %w", err)
 	}
 	cursor += count
 	if cursor > len(packet) {
-		return 0, fmt.Errorf("error parsing SNMPV3 message ID: truncted packet")
+		return 0, errors.New("error parsing SNMPV3 message ID: truncted packet")
 	}
 
 	if MsgFlags, ok := rawMsgFlags.(string); ok {
 		response.MsgFlags = SnmpV3MsgFlags(MsgFlags[0])
-		x.logPrintf("parsed msg flags %s", MsgFlags)
+		x.Logger.Printf("parsed msg flags %s", MsgFlags)
 	}
 
 	rawSecModel, count, err := parseRawField(x.Logger, packet[cursor:], "msgSecurityModel")
 	if err != nil {
-		return 0, fmt.Errorf("error parsing SNMPV3 msgSecModel: %s", err.Error())
+		return 0, fmt.Errorf("error parsing SNMPV3 msgSecModel: %w", err)
 	}
 	cursor += count
 	if cursor > len(packet) {
-		return 0, fmt.Errorf("error parsing SNMPV3 message ID: truncted packet")
+		return 0, errors.New("error parsing SNMPV3 message ID: truncted packet")
 	}
 
 	if SecModel, ok := rawSecModel.(int); ok {
 		response.SecurityModel = SnmpV3SecurityModel(SecModel)
-		x.logPrintf("Parsed security model %d", SecModel)
+		x.Logger.Printf("Parsed security model %d", SecModel)
 	}
 
 	if PDUType(packet[cursor]) != PDUType(OctetString) {
-		return 0, fmt.Errorf("invalid SNMPV3 Security Parameters")
+		return 0, errors.New("invalid SNMPV3 Security Parameters")
 	}
 	_, cursorTmp = parseLength(packet[cursor:])
 	cursor += cursorTmp
 	if cursor > len(packet) {
-		return 0, fmt.Errorf("error parsing SNMPV3 message ID: truncted packet")
+		return 0, errors.New("error parsing SNMPV3 message ID: truncted packet")
 	}
 	if response.SecurityParameters == nil {
 		response.SecurityParameters = &UsmSecurityParameters{Logger: x.Logger}
@@ -414,7 +415,7 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 	if err != nil {
 		return 0, err
 	}
-	x.logPrintf("Parsed Security Parameters. now offset=%v,", cursor)
+	x.Logger.Printf("Parsed Security Parameters. now offset=%v,", cursor)
 
 	return cursor, nil
 }
@@ -424,7 +425,7 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 	var decrypted = false
 
 	if cursor > len(packet) {
-		return nil, 0, fmt.Errorf("error parsing SNMPV3: truncated packet")
+		return nil, 0, errors.New("error parsing SNMPV3: truncated packet")
 	}
 
 	switch PDUType(packet[cursor]) {
@@ -443,44 +444,44 @@ func (x *GoSNMP) decryptPacket(packet []byte, cursor int, response *SnmpPacket) 
 			// truncate padding that might have been included with
 			// the encrypted PDU
 			if cursor+tlength > len(packet) {
-				return nil, 0, fmt.Errorf("error parsing SNMPV3: truncated packet")
+				return nil, 0, errors.New("error parsing SNMPV3: truncated packet")
 			}
 			packet = packet[:cursor+tlength]
 		}
 		cursor += cursorTmp
 		if cursor > len(packet) {
-			return nil, 0, fmt.Errorf("error parsing SNMPV3: truncated packet")
+			return nil, 0, errors.New("error parsing SNMPV3: truncated packet")
 		}
 
 		rawContextEngineID, count, err := parseRawField(x.Logger, packet[cursor:], "contextEngineID")
 		if err != nil {
-			return nil, 0, fmt.Errorf("error parsing SNMPV3 contextEngineID: %s", err.Error())
+			return nil, 0, fmt.Errorf("error parsing SNMPV3 contextEngineID: %w", err)
 		}
 		cursor += count
 		if cursor > len(packet) {
-			return nil, 0, fmt.Errorf("error parsing SNMPV3: truncated packet")
+			return nil, 0, errors.New("error parsing SNMPV3: truncated packet")
 		}
 
 		if contextEngineID, ok := rawContextEngineID.(string); ok {
 			response.ContextEngineID = contextEngineID
-			x.logPrintf("Parsed contextEngineID %s", contextEngineID)
+			x.Logger.Printf("Parsed contextEngineID %s", contextEngineID)
 		}
 		rawContextName, count, err := parseRawField(x.Logger, packet[cursor:], "contextName")
 		if err != nil {
-			return nil, 0, fmt.Errorf("error parsing SNMPV3 contextName: %s", err.Error())
+			return nil, 0, fmt.Errorf("error parsing SNMPV3 contextName: %w", err)
 		}
 		cursor += count
 		if cursor > len(packet) {
-			return nil, 0, fmt.Errorf("error parsing SNMPV3: truncated packet")
+			return nil, 0, errors.New("error parsing SNMPV3: truncated packet")
 		}
 
 		if contextName, ok := rawContextName.(string); ok {
 			response.ContextName = contextName
-			x.logPrintf("Parsed contextName %s", contextName)
+			x.Logger.Printf("Parsed contextName %s", contextName)
 		}
 
 	default:
-		return nil, 0, fmt.Errorf("error parsing SNMPV3 scoped PDU")
+		return nil, 0, errors.New("error parsing SNMPV3 scoped PDU")
 	}
 	return packet, cursor, nil
 }

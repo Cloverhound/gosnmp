@@ -12,13 +12,10 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"io/ioutil"
-	"log"
 	"math"
 	"math/big"
 	"net"
 	"strconv"
-	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -33,6 +30,10 @@ const (
 	// Base OID for MIB-2 defined SNMP variables
 	baseOid = ".1.3.6.1.2.1"
 
+	// Max oid sub-identifier value
+	// https://tools.ietf.org/html/rfc2578#section-7.1.3
+	MaxObjectSubIdentifierValue = 4294967295
+
 	// Java SNMP uses 50, snmp-net uses 10
 	defaultMaxRepetitions = 50
 
@@ -42,8 +43,6 @@ const (
 
 // GoSNMP represents GoSNMP library state.
 type GoSNMP struct {
-	mu sync.Mutex
-
 	// Conn is net connection to use, typically established using GoSNMP.Connect().
 	Conn net.Conn
 
@@ -74,19 +73,15 @@ type GoSNMP struct {
 	// Double timeout in each retry.
 	ExponentialTimeout bool
 
-	// Logger is the GoSNMP.Logger to use for debugging. If nil, debugging
-	// output will be discarded (/dev/null). For verbose logging to stdout:
-	// x.Logger = log.New(os.Stdout, "", 0)
+	// Logger is the GoSNMP.Logger to use for debugging.
+	// For verbose logging to stdout:
+	// x.Logger = NewLogger(log.New(os.Stdout, "", 0))
+	// For Release builds, you can turn off logging entirely by using the go build tag "gosnmp_nodebug" even if the logger was installed.
 	Logger Logger
-
-	// loggingEnabled is set if the Logger isn't nil, otherwise any logging calls
-	// are ignored via shortcircuit.
-	loggingEnabled bool
 
 	// Message hook methods allow passing in a functions at various points in the packet handling.
 	// For example, this can be used to collect packet timing, add metrics, or implement tracing.
 	/*
-
 
 	 */
 	// PreSend is called before a packet is sent.
@@ -284,13 +279,13 @@ func (x *GoSNMP) connect(networkSuffix string) error {
 
 	x.Transport += networkSuffix
 	if err = x.netConnect(); err != nil {
-		return fmt.Errorf("error establishing connection to host: %s", err.Error())
+		return fmt.Errorf("error establishing connection to host: %w", err)
 	}
 
 	if x.random == 0 {
 		n, err := rand.Int(rand.Reader, big.NewInt(math.MaxInt32)) // returns a uniform random value in [0, 2147483647].
 		if err != nil {
-			return fmt.Errorf("error occurred while generating random: %s", err.Error())
+			return fmt.Errorf("error occurred while generating random: %w", err)
 		}
 		x.random = uint32(n.Uint64())
 	}
@@ -337,14 +332,6 @@ func (x *GoSNMP) netConnect() error {
 }
 
 func (x *GoSNMP) validateParameters() error {
-	if x.Logger == nil {
-		x.mu.Lock()
-		defer x.mu.Unlock()
-		x.Logger = log.New(ioutil.Discard, "", 0)
-	} else {
-		x.loggingEnabled = true
-	}
-
 	if x.Transport == "" {
 		x.Transport = udp
 	}
@@ -527,7 +514,7 @@ func (x *GoSNMP) SnmpDecodePacket(resp []byte) (*SnmpPacket, error) {
 	var cursor int
 	cursor, err = x.unmarshalHeader(resp, result)
 	if err != nil {
-		err = fmt.Errorf("unable to decode packet header: %s", err.Error())
+		err = fmt.Errorf("unable to decode packet header: %w", err)
 		return result, err
 	}
 
@@ -540,14 +527,10 @@ func (x *GoSNMP) SnmpDecodePacket(resp []byte) (*SnmpPacket, error) {
 
 	err = x.unmarshalPayload(resp, cursor, result)
 	if err != nil {
-		err = fmt.Errorf("unable to decode packet body: %s", err.Error())
+		err = fmt.Errorf("unable to decode packet body: %w", err)
 		return result, err
 	}
 
-	// if result == nil {
-	// 	err = fmt.Errorf("Unable to decode packet: no variables")
-	// 	return result, err
-	// }
 	return result, nil
 }
 

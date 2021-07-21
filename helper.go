@@ -9,7 +9,6 @@
 package gosnmp
 
 import (
-	// "bytes"
 	"bytes"
 	"encoding/binary"
 	"errors"
@@ -21,7 +20,6 @@ import (
 	"net"
 	"os"
 	"strconv"
-	"strings"
 )
 
 // variable struct is used by decodeValue(), which is used for debugging
@@ -56,218 +54,211 @@ func Check(err error) {
 	}
 }
 
-func (x *GoSNMP) decodeValue(data []byte, msg string) (*variable, error) {
-	retVal := &variable{}
-
-	if len(msg) > 0 {
-		x.logPrintf("decodeValue: msg: %s", msg)
-	}
-
+func (x *GoSNMP) decodeValue(data []byte, retVal *variable) error {
 	if len(data) == 0 {
-		return nil, fmt.Errorf("err: zero byte buffer")
+		return errors.New("zero byte buffer")
 	}
 
 	// values matching this mask have the type in subsequent byte
 	if data[0]&AsnExtensionID == AsnExtensionID {
 		if len(data) < 2 {
-			return nil, fmt.Errorf("bytes: % x err: truncated (data %d length %d)", data, len(data), 2)
+			return fmt.Errorf("bytes: % x err: truncated (data %d length %d)", data, len(data), 2)
 		}
 		data = data[1:]
 	}
 	switch Asn1BER(data[0]) {
 	case Integer:
 		// 0x02. signed
-		x.logPrint("decodeValue: type is Integer")
+		x.Logger.Print("decodeValue: type is Integer")
 		length, cursor := parseLength(data)
 		if length > len(data) {
-			return nil, fmt.Errorf("bytes: % x err: truncated (data %d length %d)", data, len(data), length)
+			return fmt.Errorf("bytes: % x err: truncated (data %d length %d)", data, len(data), length)
 		}
 
 		var ret int
 		var err2 error
 		if ret, err2 = parseInt(data[cursor:length]); err2 != nil {
-			x.logPrintf("%v:", err2)
-			return nil, fmt.Errorf("bytes: % x err: %v", data, err2)
+			x.Logger.Printf("%v:", err2)
+			return fmt.Errorf("bytes: % x err: %w", data, err2)
 		}
 		retVal.Type = Integer
 		retVal.Value = ret
 	case OctetString:
 		// 0x04
-		x.logPrint("decodeValue: type is OctetString")
+		x.Logger.Print("decodeValue: type is OctetString")
 		length, cursor := parseLength(data)
 		if length > len(data) {
-			return nil, fmt.Errorf("bytes: % x err: truncated (data %d length %d)", data, len(data), length)
+			return fmt.Errorf("bytes: % x err: truncated (data %d length %d)", data, len(data), length)
 		}
 
 		retVal.Type = OctetString
 		retVal.Value = data[cursor:length]
 	case Null:
 		// 0x05
-		x.logPrint("decodeValue: type is Null")
+		x.Logger.Print("decodeValue: type is Null")
 		retVal.Type = Null
 		retVal.Value = nil
 	case ObjectIdentifier:
 		// 0x06
-		x.logPrint("decodeValue: type is ObjectIdentifier")
+		x.Logger.Print("decodeValue: type is ObjectIdentifier")
 		rawOid, _, err2 := parseRawField(x.Logger, data, "OID")
 		if err2 != nil {
-			return nil, fmt.Errorf("error parsing OID Value: %s", err2.Error())
+			return fmt.Errorf("error parsing OID Value: %w", err2)
 		}
-		var oid []int
-		var ok bool
-		if oid, ok = rawOid.([]int); !ok {
-			return nil, fmt.Errorf("unable to type assert rawOid |%v| to []int", rawOid)
+		oid, ok := rawOid.(string)
+		if !ok {
+			return fmt.Errorf("unable to type assert rawOid |%v| to string", rawOid)
 		}
 		retVal.Type = ObjectIdentifier
-		retVal.Value = oidToString(oid)
+		retVal.Value = oid
 	case IPAddress:
 		// 0x40
-		x.logPrint("decodeValue: type is IPAddress")
+		x.Logger.Print("decodeValue: type is IPAddress")
 		retVal.Type = IPAddress
 		if len(data) < 2 {
-			return nil, fmt.Errorf("not enough data for ipv4 address: %x", data)
+			return fmt.Errorf("not enough data for ipv4 address: %x", data)
 		}
 
 		switch data[1] {
 		case 0: // real life, buggy devices returning bad data
 			retVal.Value = nil
-			return retVal, nil
+			return nil
 		case 4: // IPv4
 			if len(data) < 6 {
-				return nil, fmt.Errorf("not enough data for ipv4 address: %x", data)
+				return fmt.Errorf("not enough data for ipv4 address: %x", data)
 			}
 			retVal.Value = net.IPv4(data[2], data[3], data[4], data[5]).String()
 		case 16: // IPv6
 			if len(data) < 18 {
-				return nil, fmt.Errorf("not enough data for ipv6 address: %x", data)
+				return fmt.Errorf("not enough data for ipv6 address: %x", data)
 			}
 			d := make(net.IP, 16)
 			copy(d, data[2:17])
 			retVal.Value = d.String()
 		default:
-			return nil, fmt.Errorf("got ipaddress len %d, expected 4 or 16", data[1])
+			return fmt.Errorf("got ipaddress len %d, expected 4 or 16", data[1])
 		}
 	case Counter32:
 		// 0x41. unsigned
-		x.logPrint("decodeValue: type is Counter32")
+		x.Logger.Print("decodeValue: type is Counter32")
 		length, cursor := parseLength(data)
 		if length > len(data) {
-			return nil, fmt.Errorf("not enough data for Counter32 %x (data %d length %d)", data, len(data), length)
+			return fmt.Errorf("not enough data for Counter32 %x (data %d length %d)", data, len(data), length)
 		}
 
 		ret, err2 := parseUint(data[cursor:length])
 		if err2 != nil {
-			x.logPrintf("decodeValue: err is %v", err2)
+			x.Logger.Printf("decodeValue: err is %v", err2)
 			break
 		}
 		retVal.Type = Counter32
 		retVal.Value = ret
 	case Gauge32:
 		// 0x42. unsigned
-		x.logPrint("decodeValue: type is Gauge32")
+		x.Logger.Print("decodeValue: type is Gauge32")
 		length, cursor := parseLength(data)
 		if length > len(data) {
-			return nil, fmt.Errorf("not enough data for Gauge32 %x (data %d length %d)", data, len(data), length)
+			return fmt.Errorf("not enough data for Gauge32 %x (data %d length %d)", data, len(data), length)
 		}
 
 		ret, err2 := parseUint(data[cursor:length])
 		if err2 != nil {
-			x.logPrintf("decodeValue: err is %v", err2)
+			x.Logger.Printf("decodeValue: err is %v", err2)
 			break
 		}
 		retVal.Type = Gauge32
 		retVal.Value = ret
 	case TimeTicks:
 		// 0x43
-		x.logPrint("decodeValue: type is TimeTicks")
+		x.Logger.Print("decodeValue: type is TimeTicks")
 		length, cursor := parseLength(data)
 		if length > len(data) {
-			return nil, fmt.Errorf("not enough data for TimeTicks %x (data %d length %d)", data, len(data), length)
+			return fmt.Errorf("not enough data for TimeTicks %x (data %d length %d)", data, len(data), length)
 		}
 
 		ret, err2 := parseUint32(data[cursor:length])
 		if err2 != nil {
-			x.logPrintf("decodeValue: err is %v", err2)
+			x.Logger.Printf("decodeValue: err is %v", err2)
 			break
 		}
 		retVal.Type = TimeTicks
 		retVal.Value = ret
 	case Opaque:
 		// 0x44
-		x.logPrint("decodeValue: type is Opaque")
+		x.Logger.Print("decodeValue: type is Opaque")
 		length, cursor := parseLength(data)
 		if length > len(data) {
-			return nil, fmt.Errorf("not enough data for Opaque %x (data %d length %d)", data, len(data), length)
+			return fmt.Errorf("not enough data for Opaque %x (data %d length %d)", data, len(data), length)
 		}
 
 		opaqueData := data[cursor:length]
 		// recursively decode opaque data
-		return x.decodeValue(opaqueData, msg)
+		return x.decodeValue(opaqueData, retVal)
 	case Counter64:
 		// 0x46
-		x.logPrint("decodeValue: type is Counter64")
+		x.Logger.Print("decodeValue: type is Counter64")
 		length, cursor := parseLength(data)
 		if length > len(data) {
-			return nil, fmt.Errorf("not enough data for Counter64 %x (data %d length %d)", data, len(data), length)
+			return fmt.Errorf("not enough data for Counter64 %x (data %d length %d)", data, len(data), length)
 		}
 
 		ret, err2 := parseUint64(data[cursor:length])
 		if err2 != nil {
-			x.logPrintf("decodeValue: err is %v", err2)
+			x.Logger.Printf("decodeValue: err is %v", err2)
 			break
 		}
 		retVal.Type = Counter64
 		retVal.Value = ret
 	case OpaqueFloat:
 		// 0x78
-		x.logPrint("decodeValue: type is OpaqueFloat")
+		x.Logger.Print("decodeValue: type is OpaqueFloat")
 		length, cursor := parseLength(data)
 		if length > len(data) {
-			return nil, fmt.Errorf("not enough data for OpaqueFloat %x (data %d length %d)", data, len(data), length)
+			return fmt.Errorf("not enough data for OpaqueFloat %x (data %d length %d)", data, len(data), length)
 		}
 
 		var err error
 		retVal.Type = OpaqueFloat
 		retVal.Value, err = parseFloat32(data[cursor:length])
 		if err != nil {
-			return nil, err
+			return err
 		}
 	case OpaqueDouble:
 		// 0x79
-		x.logPrint("decodeValue: type is OpaqueDouble")
+		x.Logger.Print("decodeValue: type is OpaqueDouble")
 		length, cursor := parseLength(data)
 		if length > len(data) {
-			return nil, fmt.Errorf("not enough data for OpaqueDouble %x (data %d length %d)", data, len(data), length)
+			return fmt.Errorf("not enough data for OpaqueDouble %x (data %d length %d)", data, len(data), length)
 		}
 
 		var err error
 		retVal.Type = OpaqueDouble
 		retVal.Value, err = parseFloat64(data[cursor:length])
 		if err != nil {
-			return nil, err
+			return err
 		}
 	case NoSuchObject:
 		// 0x80
-		x.logPrint("decodeValue: type is NoSuchObject")
+		x.Logger.Print("decodeValue: type is NoSuchObject")
 		retVal.Type = NoSuchObject
 		retVal.Value = nil
 	case NoSuchInstance:
 		// 0x81
-		x.logPrint("decodeValue: type is NoSuchInstance")
+		x.Logger.Print("decodeValue: type is NoSuchInstance")
 		retVal.Type = NoSuchInstance
 		retVal.Value = nil
 	case EndOfMibView:
 		// 0x82
-		x.logPrint("decodeValue: type is EndOfMibView")
+		x.Logger.Print("decodeValue: type is EndOfMibView")
 		retVal.Type = EndOfMibView
 		retVal.Value = nil
 	default:
-		x.logPrintf("decodeValue: type %x isn't implemented", data[0])
+		x.Logger.Printf("decodeValue: type %x isn't implemented", data[0])
 		retVal.Type = UnknownType
 		retVal.Value = nil
 	}
-	x.logPrintf("decodeValue: value is %#v", retVal.Value)
-	return retVal, nil
+	x.Logger.Printf("decodeValue: value is %#v", retVal.Value)
+	return nil
 }
 
 func marshalUvarInt(x uint32) []byte {
@@ -360,7 +351,7 @@ func marshalUint64(v interface{}) ([]byte, error) {
 	return bytes.TrimLeft(bs, "\x00"), nil
 }
 
-// Counter32, Gauge32, TimeTicks, Unsigned32
+// Counter32, Gauge32, TimeTicks, Unsigned32, SNMPError
 func marshalUint32(v interface{}) ([]byte, error) {
 	bs := make([]byte, 4)
 
@@ -370,9 +361,10 @@ func marshalUint32(v interface{}) ([]byte, error) {
 		source = val
 	case uint:
 		source = uint32(val)
+	case uint8:
+		source = uint32(val)
 	// We could do others here, but coercing from anything else is dangerous.
-	// Even uint could be 64 bits, though in practice nothing we work with here
-	// is.
+	// Even uint could be 64 bits, though in practice nothing we work with is.
 	default:
 		return nil, fmt.Errorf("unable to marshal %T to uint32", v)
 	}
@@ -441,62 +433,59 @@ func marshalLength(length int) ([]byte, error) {
 	return append(header, bufBytes...), nil
 }
 
-func marshalObjectIdentifier(oid []int) (ret []byte, err error) {
+func marshalObjectIdentifier(oid string) ([]byte, error) {
 	out := new(bytes.Buffer)
-	if len(oid) < 2 || oid[0] > 6 || oid[1] >= 40 {
-		return nil, errors.New("invalid object identifier")
-	}
-
-	err = out.WriteByte(byte(oid[0]*40 + oid[1]))
-	if err != nil {
-		return
-	}
-	for i := 2; i < len(oid); i++ {
-		err = marshalBase128Int(out, int64(oid[i]))
-		if err != nil {
-			return
-		}
-	}
-
-	ret = out.Bytes()
-	return
-}
-
-func marshalOID(oid string) ([]byte, error) {
+	oidLength := len(oid)
+	oidBase := 0
 	var err error
-
-	// Encode the oid
-	oid = strings.Trim(oid, ".")
-	oidParts := strings.Split(oid, ".")
-	oidBytes := make([]int, len(oidParts))
-
-	// Convert the string OID to an array of integers
-	for i := 0; i < len(oidParts); i++ {
-		oidBytes[i], err = strconv.Atoi(oidParts[i])
-		if err != nil {
-			return nil, fmt.Errorf("unable to parse OID: %s", err.Error())
+	i := 0
+	for j := 0; j < oidLength; {
+		if oid[j] == '.' {
+			j++
+			continue
 		}
+		var val int64 = 0
+		for j < oidLength && oid[j] != '.' {
+			ch := int64(oid[j] - '0')
+			if ch > 9 {
+				return []byte{}, fmt.Errorf("unable to marshal OID: Invalid object identifier")
+			}
+			val *= 10
+			val += ch
+			j++
+		}
+		switch i {
+		case 0:
+			if val > 6 {
+				return []byte{}, fmt.Errorf("unable to marshal OID: Invalid object identifier")
+			}
+			oidBase = int(val * 40)
+		case 1:
+			if val >= 40 {
+				return []byte{}, fmt.Errorf("unable to marshal OID: Invalid object identifier")
+			}
+			oidBase += int(val)
+			err = out.WriteByte(byte(oidBase))
+			if err != nil {
+				return []byte{}, fmt.Errorf("unable to marshal OID: Invalid object identifier")
+			}
+
+		default:
+			if val > MaxObjectSubIdentifierValue {
+				return []byte{}, fmt.Errorf("unable to marshal OID: Value out of range")
+			}
+			err = marshalBase128Int(out, val)
+			if err != nil {
+				return []byte{}, fmt.Errorf("unable to marshal OID: Invalid object identifier")
+			}
+		}
+		i++
+	}
+	if i < 2 || i > 128 {
+		return []byte{}, fmt.Errorf("unable to marshal OID: Invalid object identifier")
 	}
 
-	mOid, err := marshalObjectIdentifier(oidBytes)
-
-	if err != nil {
-		return nil, fmt.Errorf("unable to marshal OID: %s", err.Error())
-	}
-
-	return mOid, err
-}
-
-func oidToString(oid []int) (ret string) {
-	oidAsString := make([]string, len(oid)+1)
-
-	// used for appending of the first dot
-	oidAsString[0] = ""
-	for i := range oid {
-		oidAsString[i+1] = strconv.Itoa(oid[i])
-	}
-
-	return strings.Join(oidAsString, ".")
+	return out.Bytes(), nil
 }
 
 // TODO no tests
@@ -506,22 +495,22 @@ func ipv4toBytes(ip net.IP) []byte {
 
 // parseBase128Int parses a base-128 encoded int from the given offset in the
 // given byte slice. It returns the value and the new offset.
-func parseBase128Int(bytes []byte, initOffset int) (ret, offset int, err error) {
+func parseBase128Int(bytes []byte, initOffset int) (ret int64, offset int, err error) {
 	offset = initOffset
 	for shifted := 0; offset < len(bytes); shifted++ {
 		if shifted > 4 {
-			err = fmt.Errorf("structural error: base 128 integer too large")
+			err = errors.New("structural error: base 128 integer too large")
 			return
 		}
 		ret <<= 7
 		b := bytes[offset]
-		ret |= int(b & 0x7f)
+		ret |= int64(b & 0x7f)
 		offset++
 		if b&0x80 == 0 {
 			return
 		}
 	}
-	err = fmt.Errorf("syntax error: truncated base 128 integer")
+	err = errors.New("syntax error: truncated base 128 integer")
 	return
 }
 
@@ -593,28 +582,28 @@ func parseLength(bytes []byte) (length int, cursor int) {
 // parseObjectIdentifier parses an OBJECT IDENTIFIER from the given bytes and
 // returns it. An object identifier is a sequence of variable length integers
 // that are assigned in a hierarchy.
-func parseObjectIdentifier(bytes []byte) (s []int, err error) {
-	if len(bytes) == 0 {
-		return []int{0}, nil
+func parseObjectIdentifier(src []byte) (ret string, err error) {
+	if len(src) == 0 {
+		err = fmt.Errorf("invalid OID length")
+		return
 	}
+	out := new(bytes.Buffer)
 
-	// In the worst case, we get two elements from the first byte (which is
-	// encoded differently) and then every varint is a single byte long.
-	s = make([]int, len(bytes)+1)
+	out.WriteByte('.')
+	out.WriteString(strconv.FormatInt(int64(int(src[0])/40), 10))
+	out.WriteByte('.')
+	out.WriteString(strconv.FormatInt(int64(int(src[0])%40), 10))
 
-	// The first byte is 40*value1 + value2:
-	s[0] = int(bytes[0]) / 40
-	s[1] = int(bytes[0]) % 40
-	i := 2
-	for offset := 1; offset < len(bytes); i++ {
-		var v int
-		v, offset, err = parseBase128Int(bytes, offset)
+	for offset := 1; offset < len(src); {
+		out.WriteByte('.')
+		var v int64
+		v, offset, err = parseBase128Int(src, offset)
 		if err != nil {
 			return
 		}
-		s[i] = v
+		out.WriteString(strconv.FormatInt(v, 10))
 	}
-	s = s[0:i]
+	ret = out.String()
 	return
 }
 
@@ -631,7 +620,7 @@ func parseRawField(logger Logger, data []byte, msg string) (interface{}, int, er
 		}
 		i, err := parseInt(data[cursor:length])
 		if err != nil {
-			return nil, 0, fmt.Errorf("unable to parse raw INTEGER: %x err: %v", data, err)
+			return nil, 0, fmt.Errorf("unable to parse raw INTEGER: %x err: %w", data, err)
 		}
 		return i, length, nil
 	case OctetString:
@@ -671,7 +660,7 @@ func parseRawField(logger Logger, data []byte, msg string) (interface{}, int, er
 		}
 		ret, err := parseUint(data[cursor:length])
 		if err != nil {
-			return nil, 0, fmt.Errorf("error in parseUint: %s", err)
+			return nil, 0, fmt.Errorf("error in parseUint: %w", err)
 		}
 		return ret, length, nil
 	}
