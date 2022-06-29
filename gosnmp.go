@@ -166,9 +166,6 @@ type GoSNMP struct {
 	// ContextName is SNMPV3 ContextName in ScopedPDU
 	ContextName string
 
-	// Allow all versions of traps to be received
-	TrapRecvAllowAll bool
-
 	// Internal - used to sync requests to responses - snmpv3.
 	msgID uint32
 
@@ -385,18 +382,16 @@ func (x *GoSNMP) validateParameters() error {
 		x.MsgFlags |= Reportable // tell the snmp server that a report PDU MUST be sent
 	}
 
-	if x.TrapRecvAllowAll == false {
-		if x.Version == Version3 {
-			x.MsgFlags |= Reportable // tell the snmp server that a report PDU MUST be sent
+	if x.Version == Version3 {
+		x.MsgFlags |= Reportable // tell the snmp server that a report PDU MUST be sent
 
-			err := x.validateParametersV3()
-			if err != nil {
-				return err
-			}
-			err = x.SecurityParameters.init(x.Logger)
-			if err != nil {
-				return err
-			}
+		err := x.validateParametersV3()
+		if err != nil {
+			return err
+		}
+		err = x.SecurityParameters.init(x.Logger)
+		if err != nil {
+			return err
 		}
 	}
 
