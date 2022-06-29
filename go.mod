@@ -1,4 +1,4 @@
-module github.com/balasankarrajaguru/gosnmp
+module github.com/gosnmp/gosnmp
 
 go 1.17
 

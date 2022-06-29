@@ -9,7 +9,7 @@ import (
 	"log"
 	"time"
 
-	g "github.com/balasankarrajaguru/gosnmp"
+	g "github.com/gosnmp/gosnmp"
 )
 
 func main() {
