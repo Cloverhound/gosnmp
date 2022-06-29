@@ -49,7 +49,7 @@ import (
 	"strconv"
 	"time"
 
-	g "github.com/gosnmp/gosnmp"
+	g "github.com/Cloverhound/gosnmp"
 )
 
 func main() {
