@@ -119,6 +119,8 @@ type TrapListener struct {
 	// OnNewTrap handles incoming Trap and Inform PDUs.
 	OnNewTrap TrapHandlerFunc
 
+	GetParams GetParamsFunc
+
 	// These unexported fields are for letting test cases
 	// know we are ready.
 	conn  *net.UDPConn
@@ -143,6 +145,8 @@ type TrapListener struct {
 // Nonetheless, the packet's Type field can be examined to determine what type
 // of event this is for e.g. statistics gathering functions, etc.
 type TrapHandlerFunc func(s *SnmpPacket, u *net.UDPAddr)
+
+type GetParamsFunc func(u *net.UDPAddr) *GoSNMP
 
 // NewTrapListener returns an initialized TrapListener.
 //
@@ -229,6 +233,8 @@ func (t *TrapListener) listenUDP(addr string) error {
 			return nil
 
 		default:
+			params := t.Params
+
 			var buf [4096]byte
 			rlen, remote, err := t.conn.ReadFromUDP(buf[:])
 			if err != nil {
@@ -236,24 +242,28 @@ func (t *TrapListener) listenUDP(addr string) error {
 					// err most likely comes from reading from a closed connection
 					continue
 				}
-				t.Params.Logger.Printf("TrapListener: error in read %s\n", err)
+				params.Logger.Printf("TrapListener: error in read %s\n", err)
 				continue
 			}
 
+			if t.GetParams != nil {
+				params = t.GetParams(remote)
+			}
+
 			msg := buf[:rlen]
-			trap, err := t.Params.UnmarshalTrap(msg, false)
+			trap, err := params.UnmarshalTrap(msg, false)
 			if err != nil {
-				t.Params.Logger.Printf("TrapListener: error in UnmarshalTrap %s\n", err)
+				params.Logger.Printf("TrapListener: error in UnmarshalTrap %s\n", err)
 				continue
 			}
-			if trap.Version == Version3 && trap.SecurityModel == UserSecurityModel && t.Params.SecurityModel == UserSecurityModel {
-				securityParams, ok := t.Params.SecurityParameters.(*UsmSecurityParameters)
+			if trap.Version == Version3 && trap.SecurityModel == UserSecurityModel && params.SecurityModel == UserSecurityModel {
+				securityParams, ok := params.SecurityParameters.(*UsmSecurityParameters)
 				if !ok {
-					t.Params.Logger.Printf("TrapListener: Invalid SecurityParameters types")
+					params.Logger.Printf("TrapListener: Invalid SecurityParameters types")
 				}
 				packetSecurityParams, ok := trap.SecurityParameters.(*UsmSecurityParameters)
 				if !ok {
-					t.Params.Logger.Printf("TrapListener: Invalid SecurityParameters types")
+					params.Logger.Printf("TrapListener: Invalid SecurityParameters types")
 				}
 				snmpEngineID := securityParams.AuthoritativeEngineID
 				msgAuthoritativeEngineID := packetSecurityParams.AuthoritativeEngineID
@@ -266,7 +276,7 @@ func (t *TrapListener) listenUDP(addr string) error {
 						atomic.AddUint32(&t.usmStatsUnknownEngineIDsCount, 1)
 						err := t.reportAuthoritativeEngineID(trap, snmpEngineID, remote)
 						if err != nil {
-							t.Params.Logger.Printf("TrapListener: %s\n", err)
+							params.Logger.Printf("TrapListener: %s\n", err)
 						}
 						continue
 					}
@@ -302,7 +312,7 @@ func (t *TrapListener) listenUDP(addr string) error {
 				// determine), so it's left to future implementations.
 				err := t.SendUDP(trap, remote)
 				if err != nil {
-					t.Params.Logger.Printf("TrapListener: %s\n", err)
+					params.Logger.Printf("TrapListener: %s\n", err)
 				}
 			}
 		}
