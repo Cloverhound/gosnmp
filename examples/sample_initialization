@@ -1,0 +1,33 @@
+x.SecurityTable = &gosnmp.UsmSecurityTable {
+    UsmTableEntries : []gosnmp.UsmSecurityParameters {
+        gosnmp.UsmSecurityParameters{
+            UserName:                 s.SecName,
+            PrivacyProtocol:          privacyProtocol,
+            PrivacyPassphrase:        s.PrivPassword,
+            AuthenticationPassphrase: s.AuthPassword,
+            AuthenticationProtocol:   authenticationProtocol,
+        },
+        gosnmp.UsmSecurityParameters{
+            UserName:                 s.SecName,
+            PrivacyProtocol:          privacyProtocol,
+            PrivacyPassphrase:        s.PrivPassword,
+            AuthenticationPassphrase: s.AuthPassword,
+            AuthenticationProtocol:   authenticationProtocol,
+        },
+        gosnmp.UsmSecurityParameters{
+            UserName:                 s.SecName,
+            PrivacyProtocol:          privacyProtocol,
+            PrivacyPassphrase:        s.PrivPassword,
+            AuthenticationPassphrase: s.AuthPassword,
+            AuthenticationProtocol:   authenticationProtocol,
+        },
+        gosnmp.UsmSecurityParameters{
+            UserName:                 s.SecName,
+            PrivacyProtocol:          privacyProtocol,
+            PrivacyPassphrase:        s.PrivPassword,
+            AuthenticationPassphrase: s.AuthPassword,
+            AuthenticationProtocol:   authenticationProtocol,
+        }
+    }
+}
+
